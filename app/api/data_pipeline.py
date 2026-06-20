@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import csv
 import io
 import json
+from datetime import datetime
 from app.core.database import get_db
 from app.schemas.data_pipeline import (
     DataIngestRequest, IngestResponse, DataProcessRequest,
@@ -11,6 +13,7 @@ from app.schemas.data_pipeline import (
     QualityMetricsResponse
 )
 from app.services import data_pipeline_service as dps
+from app.services import report_service
 from app.models.data_pipeline import DataIngestion, ProcessedMetric
 
 router = APIRouter(prefix="/data", tags=["data-pipeline"])
@@ -157,3 +160,15 @@ def list_ingestions(
         record_count=ing.record_count,
         created_at=ing.created_at
     ) for ing in ingestions]
+
+
+@router.get("/report/pdf")
+def download_pdf_report(db: Session = Depends(get_db)):
+    pdf_buffer = report_service.generate_report(db)
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename=data-pipeline-report-{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        }
+    )
